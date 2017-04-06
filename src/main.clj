@@ -1,7 +1,8 @@
 (ns main
   (:require [io.pedestal.http :as http]
             [io.pedestal.http.route :as route]
-            [io.pedestal.test :as test]))
+            [io.pedestal.test :as test]
+            [clojure.tools.logging :as log]))
 
 (defn response [status body & {:as headers}]
   {:status status :body body :headers headers})
@@ -19,6 +20,7 @@
   (get dbval db-id))
 
 (defn find-list-item-by-ids [dbval list-id item-id]
+  (log/info (get-in dbval [list-id :items] nil))
   (get-in dbval [list-id :items item-id] nil))
 
 (defn list-item-add
@@ -79,7 +81,7 @@
   {:name :list-view
    :enter
    (fn [context]
-     (if-let [db-id (get-in context [:request :params :list-id])]
+     (if-let [db-id (get-in context [:request :path-params :list-id])]
        (if-let [the-list (find-list-by-id (get-in context [:request :database]) db-id)]
          (assoc context :result the-list)
          context)
@@ -112,13 +114,13 @@
 
 (def routes
   (route/expand-routes
-   #{["/todo"                 :post   [db-interceptor list-create]]
-     ["/todo"                 :get    echo :route-name :list-query-form]
-     ["/todo/:list-id"        :get    [entity-render db-interceptor list-view]]
-     ["/todo/:list-id"        :post   [entity-render list-item-view db-interceptor list-item-create]]
-     ["/todo/:list-id/:item"  :get    [entity-render list-item-view]]
-     ["/todo/:list-id/:item"  :put    echo :route-name :list-item-update]
-     ["/todo/:list-id/:item"  :delete echo :route-name :list-item-delete]}))
+   #{["/todo"                    :post   [db-interceptor list-create]]
+     ["/todo"                    :get    echo :route-name :list-query-form]
+     ["/todo/:list-id"           :get    [entity-render db-interceptor list-view]]
+     ["/todo/:list-id"           :post   [entity-render list-item-view db-interceptor list-item-create]]
+     ["/todo/:list-id/:item-id"  :get    [entity-render list-item-view db-interceptor] :route-name :list-item-view]
+     ["/todo/:list-id/:item-id"  :put    [entity-render list-item-view db-interceptor] :route-name :list-item-update]
+     ["/todo/:list-id/:item-id"  :delete echo :route-name :list-item-delete]}))
 
 (def service-map
   {::http/routes routes
@@ -144,5 +146,7 @@
   (stop-dev)
   (start-dev))
 
-(defn test-request [verb url]
-  (io.pedestal.test/response-for (::http/service-fn @server) verb url))
+(def test-request
+  (partial io.pedestal.test/response-for (::http/service-fn @server)))
+
+(def url-for (route/url-for-routes routes))
