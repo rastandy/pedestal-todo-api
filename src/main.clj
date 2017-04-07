@@ -2,7 +2,8 @@
   (:require [io.pedestal.http :as http]
             [io.pedestal.http.route :as route]
             [io.pedestal.test :as test]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log]
+            [clojure.string :as str]))
 
 (defn response [status body & {:as headers}]
   {:status status :body body :headers headers})
@@ -126,14 +127,38 @@
          context)
        context))})
 
+(def list-item-update
+  {:name :list-item-updated
+   :enter
+   (fn [context]
+     (if-let [list-id (get-in context [:request :path-params :list-id])]
+       (if-let [item-id (get-in context [:request :path-params :item-id])]
+         (if-let [done? (get-in context [:request :query-params :done])]
+           (-> context
+               (assoc :tx-data [assoc-in [list-id :items item-id :done?] done?]))
+           context)
+         context)
+       context))})
+
+(def list-query
+  {:name :list-query
+   :leave
+   (fn [context]
+     (if-let [db (get-in context [:request :database])]
+       (let [q (get-in context [:request :query-params :q] "")]
+         (if-let [lists (filter #(str/includes? (:name (val %)) q) db)]
+           (assoc context :result (into {} lists))
+           context))
+       context))})
+
 (def routes
   (route/expand-routes
    #{["/todo"                    :post   [db-interceptor list-create]]
-     ["/todo"                    :get    echo :route-name :list-query-form]
+     ["/todo"                    :get    [entity-render db-interceptor list-query]]
      ["/todo/:list-id"           :get    [entity-render db-interceptor list-view]]
      ["/todo/:list-id"           :post   [entity-render list-item-view db-interceptor list-item-create]]
      ["/todo/:list-id/:item-id"  :get    [entity-render db-interceptor list-item-view]]
-     ["/todo/:list-id/:item-id"  :put    echo :route-name :list-item-update]
+     ["/todo/:list-id/:item-id"  :put    [entity-render list-item-view db-interceptor list-item-update]]
      ["/todo/:list-id/:item-id"  :delete [entity-render db-interceptor list-item-delete]]}))
 
 (def service-map
