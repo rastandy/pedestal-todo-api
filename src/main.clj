@@ -108,8 +108,22 @@
              new-item (make-list-item nm)
              item-id  (str (gensym "i"))]
          (-> context
-             (assoc :tx-data  [list-item-add list-id item-id new-item])
+             (assoc :tx-data [list-item-add list-id item-id new-item])
              (assoc-in [:request :path-params :item-id] item-id)))
+       context))})
+
+(def list-item-delete
+  {:name :list-item-delete
+   :enter
+   (fn [context]
+     (if-let [list-id (get-in context [:request :path-params :list-id])]
+       (if-let [item-id (get-in context [:request :path-params :item-id])]
+         (if-let [item (find-list-item-by-ids (get-in context [:request :database]) list-id item-id)]
+           (-> context
+               (assoc :tx-data [update-in [list-id :items] dissoc item-id])
+               (assoc :result (str "item " item-id " deleted")))
+           context)
+         context)
        context))})
 
 (def routes
@@ -118,9 +132,9 @@
      ["/todo"                    :get    echo :route-name :list-query-form]
      ["/todo/:list-id"           :get    [entity-render db-interceptor list-view]]
      ["/todo/:list-id"           :post   [entity-render list-item-view db-interceptor list-item-create]]
-     ["/todo/:list-id/:item-id"  :get    [entity-render list-item-view db-interceptor] :route-name :list-item-view]
-     ["/todo/:list-id/:item-id"  :put    [entity-render list-item-view db-interceptor] :route-name :list-item-update]
-     ["/todo/:list-id/:item-id"  :delete echo :route-name :list-item-delete]}))
+     ["/todo/:list-id/:item-id"  :get    [entity-render db-interceptor list-item-view]]
+     ["/todo/:list-id/:item-id"  :put    echo :route-name :list-item-update]
+     ["/todo/:list-id/:item-id"  :delete [entity-render db-interceptor list-item-delete]]}))
 
 (def service-map
   {::http/routes routes
