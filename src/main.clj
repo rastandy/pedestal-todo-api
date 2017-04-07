@@ -21,7 +21,6 @@
   (get dbval db-id))
 
 (defn find-list-item-by-ids [dbval list-id item-id]
-  (log/info (get-in dbval [list-id :items] nil))
   (get-in dbval [list-id :items item-id] nil))
 
 (defn list-item-add
